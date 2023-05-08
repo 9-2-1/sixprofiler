@@ -1,0 +1,10 @@
+node_modules/
+.*.un~
+.*.swp
+.vs/
+*.js
+*.d.ts
+*.map
+tsconfig.tsbuildinfo
+yarn-error.log
+!webpack.config.js

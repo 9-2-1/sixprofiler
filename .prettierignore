@@ -1,0 +1,4 @@
+*.js
+*.d.ts
+tsconfig.tsbuildinfo
+!webpack.config.js
