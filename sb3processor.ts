@@ -219,7 +219,9 @@ export class Sb3Class {
     let ret: string[] = [];
     for (let i = 0; i < this.targetcount(); i++) {
       const target = this.target(i);
-      if (target === null) throw new Error();
+      if (target === null) {
+        throw new Error();
+      }
       ret = ret.concat(target.allBlockId());
     }
     return ret;
@@ -230,7 +232,11 @@ export class TargetClass {
   _source: TargetJSON;
 
   constructor(public sb3class: Sb3Class, public id: number) {
-    this._source = this.sb3class._source.targets[this.id];
+    const source = this.sb3class._source.targets[this.id];
+    if (source === undefined) {
+      throw new Error();
+    }
+    this._source = source;
   }
 
   isStage(): boolean {
@@ -261,24 +267,27 @@ export class TargetClass {
     value: any;
   } {
     let vari = this._source[type];
+    let getvalue: any;
     let id: string | null = null;
-    for (const vid in vari) {
-      if (vari[vid][0] === name) {
+    for (const [vid, vinfo] of Object.entries(vari)) {
+      if (vinfo[0] === name) {
         if (value !== undefined) {
-          vari[vid][1] = value;
+          vinfo[1] = value;
         }
         id = vid;
+        getvalue = vinfo[1];
         break;
       }
     }
     if (id === null && !this.isStage()) {
       vari = this.sb3class.stage()._source[type];
-      for (const vid in vari) {
-        if (vari[vid][0] === name) {
+      for (const [vid, vinfo] of Object.entries(vari)) {
+        if (vinfo[0] === name) {
           if (value !== undefined) {
-            vari[vid][1] = value;
+            vinfo[1] = value;
           }
           id = vid;
+          getvalue = vinfo[1];
           break;
         }
       }
@@ -288,8 +297,8 @@ export class TargetClass {
         for (let i = 0; i < this.sb3class.targetcount(); i++) {
           const target = this.sb3class.target(i);
           const vari = target._source[type];
-          for (const varid in vari) {
-            if (vari[varid][0] === name) {
+          for (const vinfo of Object.values(vari)) {
+            if (vinfo[0] === name) {
               throw new Error();
             }
           }
@@ -297,18 +306,18 @@ export class TargetClass {
       }
       id = newid(Object.keys(vari));
       vari[id] = [name, value];
+      getvalue = value;
     }
     if (id === null) {
       throw new Error();
     } else {
-      return { id, value: vari[id][1] };
+      return { id, value: getvalue };
     }
   }
 
   variables(): string[] {
     const ret: string[] = [];
-    for (const id in this._source.variables) {
-      const variable = this._source.variables[id];
+    for (const variable of Object.values(this._source.variables)) {
       ret.push(variable[0]);
     }
     return ret;
@@ -316,8 +325,7 @@ export class TargetClass {
 
   lists(): string[] {
     const ret: string[] = [];
-    for (const id in this._source.lists) {
-      const list = this._source.lists[id];
+    for (const list of Object.values(this._source.lists)) {
       ret.push(list[0]);
     }
     return ret;
@@ -498,16 +506,14 @@ export class TargetClass {
       idmap[id] = nid;
     }
     const newblocks: { [id: string]: BlockJSON } = {};
-    for (const id in blocks) {
-      const block = blocks[id];
+    for (const [id, block] of Object.entries(blocks)) {
       if (Array.isArray(block)) {
         transShortBlock(block);
       } else {
         block.parent = transId(block.parent ?? null);
         block.topLevel = block.parent === null;
         block.next = transId(block.next ?? null);
-        for (const name in block.inputs) {
-          const input = block.inputs[name];
+        for (const [name, input] of Object.entries(block.inputs)) {
           switch (input[0]) {
             case 1:
             case 2:
@@ -543,8 +549,7 @@ export class TargetClass {
     }
     Object.assign(this._source.blocks, newblocks);
     const ret: BlockClass[] = [];
-    for (const i in newblocks) {
-      const block = newblocks[i];
+    for (const [i, block] of Object.entries(newblocks)) {
       if (Array.isArray(block) || block.topLevel) {
         ret.push(new BlockClass(i, this));
       }
@@ -554,8 +559,7 @@ export class TargetClass {
 
   topBlocks(): BlockClass[] {
     const ret: BlockClass[] = [];
-    for (const i in this._source.blocks) {
-      const block = this._source.blocks[i];
+    for (const [i, block] of Object.entries(this._source.blocks)) {
       if (Array.isArray(block) || block.topLevel) {
         ret.push(new BlockClass(i, this));
       }
@@ -564,9 +568,6 @@ export class TargetClass {
   }
 
   block(id: string): BlockClass {
-    if (!Object.prototype.hasOwnProperty.call(this._source.blocks, id)) {
-      throw new Error("block id 不存在");
-    }
     return new BlockClass(id, this);
   }
 
@@ -583,7 +584,11 @@ export class BlockClass {
   _source: BlockJSON;
 
   constructor(public id: string, public target: TargetClass) {
-    this._source = target._source.blocks[id];
+    const source = target._source.blocks[id];
+    if (source === undefined) {
+      throw new Error();
+    }
+    this._source = source;
   }
 
   parentReplace(other: BlockClass | null) {
@@ -706,10 +711,10 @@ export class BlockClass {
     if (Array.isArray(this._source)) {
       throw new Error();
     }
-    if (!Object.prototype.hasOwnProperty.call(this._source.inputs, input)) {
+    let inputo = this._source.inputs[input];
+    if (inputo === undefined) {
       throw new Error();
     }
-    let inputo = this._source.inputs[input];
     if (other !== undefined) {
       let otherval;
       switch (other.type) {
@@ -780,10 +785,10 @@ export class BlockClass {
     if (Array.isArray(this._source)) {
       throw new Error();
     }
-    if (!Object.prototype.hasOwnProperty.call(this._source.inputs, input)) {
+    let inputo = this._source.inputs[input];
+    if (inputo === undefined) {
       throw new Error();
     }
-    let inputo = this._source.inputs[input];
     if (other !== undefined) {
       let otherval;
       switch (other.type) {
@@ -859,10 +864,10 @@ export class BlockClass {
     if (Array.isArray(this._source)) {
       throw new Error();
     }
-    if (!Object.prototype.hasOwnProperty.call(this._source.inputs, input)) {
+    const inputo = this._source.inputs[input];
+    if (inputo === undefined) {
       throw new Error();
     }
-    const inputo = this._source.inputs[input];
     let valueRef: BlockRef | ShadowRef | null = null;
     switch (inputo[0]) {
       case 1:
@@ -884,6 +889,9 @@ export class BlockClass {
           throw new Error();
         }
         const field = shadow.fields()[0];
+        if (field === undefined) {
+          throw new Error();
+        }
         if (value !== undefined) {
           shadow.fieldvalue(field, value);
         }
@@ -936,10 +944,10 @@ export class BlockClass {
     if (Array.isArray(this._source)) {
       throw new Error();
     }
-    if (!Object.prototype.hasOwnProperty.call(this._source.fields, field)) {
+    const fieldo = this._source.fields[field];
+    if (fieldo === undefined) {
       throw new Error();
     }
-    const fieldo = this._source.fields[field];
     if (value !== undefined) {
       if (typeof value !== "string") {
         throw new Error();

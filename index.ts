@@ -4,7 +4,15 @@ import loader from "./loader";
 import * as sb3processor from "./sb3processor";
 
 async function main() {
-  const sb3file = await fs.promises.readFile(process.argv[2]);
+  const argv2 = process.argv[2];
+  const argv3 = process.argv[3];
+  if (argv2 === undefined) {
+    throw new Error();
+  }
+  if (argv3 === undefined) {
+    throw new Error();
+  }
+  const sb3file = await fs.promises.readFile(argv2);
   const sb3load = new loader();
   const sb3json = await sb3load.load(sb3file);
   // await fs.promises.writeFile(
@@ -18,7 +26,7 @@ async function main() {
   //     }) +
   //     ";\n\nconsole.log(sb3json);"
   // );
-  if (process.argv[3] === "-d") {
+  if (argv3 === "-d") {
     dump(sb3json);
     return;
   }
@@ -53,7 +61,7 @@ async function main() {
   //     }) +
   //     ";\n\nconsole.log(sb3json);"
   // );
-  await fs.promises.writeFile(process.argv[3], new Uint8Array(sb3file_new));
+  await fs.promises.writeFile(argv3, new Uint8Array(sb3file_new));
 }
 
 function dump(sb3json: sb3processor.Sb3JSON): void {
@@ -100,19 +108,25 @@ function dump(sb3json: sb3processor.Sb3JSON): void {
       infoi++;
       while (infoi < infomap.length) {
         const val = infomap[infoi];
-        if (val === "--") {
+        if (val === "--" || val === undefined) {
           break;
         }
-        lev[i].push(val);
+        lev[i]?.push(val);
         infoi++;
       }
     }
     const infoframe: { id: number; count: number; time: number }[] = [];
     for (let i = 0; i < lev[0].length; i++) {
+      const id = lev[0][i];
+      const count = lev[1][i];
+      const time = lev[2][i];
+      if (id === undefined || count === undefined || time === undefined) {
+        throw new Error();
+      }
       infoframe.push({
-        id: lev[0][i],
-        count: lev[1][i],
-        time: lev[2][i],
+        id,
+        count,
+        time,
       });
     }
     infoarea.push(infoframe);
@@ -129,8 +143,9 @@ function dump(sb3json: sb3processor.Sb3JSON): void {
   } = {};
   for (const info of infoarea) {
     for (const infoid of info) {
-      if (!Object.prototype.hasOwnProperty.call(gather, infoid.id)) {
-        gather[infoid.id] = {
+      let ginfo = gather[infoid.id];
+      if (ginfo === undefined) {
+        ginfo = gather[infoid.id] = {
           id: infoid.id,
           count: 0,
           time: 0,
@@ -138,13 +153,13 @@ function dump(sb3json: sb3processor.Sb3JSON): void {
           maxtime: 0,
         };
       }
-      gather[infoid.id].count += infoid.count;
-      gather[infoid.id].time += infoid.time;
-      if (infoid.count > gather[infoid.id].maxcount) {
-        gather[infoid.id].maxcount = infoid.count;
+      ginfo.count += infoid.count;
+      ginfo.time += infoid.time;
+      if (infoid.count > ginfo.maxcount) {
+        ginfo.maxcount = infoid.count;
       }
-      if (infoid.time > gather[infoid.id].maxtime) {
-        gather[infoid.id].maxtime = infoid.time;
+      if (infoid.time > ginfo.maxtime) {
+        ginfo.maxtime = infoid.time;
       }
     }
   }
@@ -191,10 +206,10 @@ function dump(sb3json: sb3processor.Sb3JSON): void {
           };
           const opcode = topblock._source.opcode;
           const fields = Object.values(topblock._source.fields);
-          descp = opcodemap[opcode];
-          if (descp !== undefined) {
+          const desmap = opcodemap[opcode];
+          if (desmap !== undefined) {
             fields.forEach((v, i) => {
-              descp = descp.replace(
+              descp = desmap.replace(
                 new RegExp(`%${i + 1}`),
                 JSON.stringify(v[0])
               );
@@ -282,7 +297,7 @@ function unpatch(
         const next = topblock.next();
         topblock.next(null);
         const entry = target.newBlock(t_flag)[0];
-        if (Array.isArray(entry._source)) {
+        if (entry === undefined || Array.isArray(entry._source)) {
           throw new Error();
         }
         entry.next(next);
@@ -372,7 +387,7 @@ export async function patch(
         const next = topblock.next();
         topblock.next(null);
         const entry = target.newBlock(t_entry)[0];
-        if (Array.isArray(entry._source)) {
+        if (entry === undefined || Array.isArray(entry._source)) {
           throw new Error();
         }
         entry.next(next);
@@ -385,14 +400,29 @@ export async function patch(
       topblock.bfs((block) => {
         const parent = block.parent();
         if (parent !== null) {
-          insertList.push(block);
+          // 在循环积木（内）后，调用积木后，等待积木后
+          if (!Array.isArray(parent._source)) {
+            const opcode = parent._source.opcode;
+            if (
+              (opcode.startsWith("control_") &&
+                !opcode.startsWith("control_if")) ||
+              opcode.startsWith("procedures_call") ||
+              opcode.includes("wait") ||
+              parent.parent() === null
+            ) {
+              insertList.push(block);
+            }
+          }
         }
         return "substack";
       });
       for (const block of insertList) {
         const checker = target.newBlock(t_sixlibcall)[0];
+        if (checker === undefined) {
+          throw new Error();
+        }
         checker.inputvalue(checker.procinput(0), tag);
-        if (block.parent()?.parent()) {
+        if (block.parent()?.parent() !== null) {
           checker.inputvalue(checker.procinput(1), 0);
         } else {
           checker.inputvalue(checker.procinput(1), 1);

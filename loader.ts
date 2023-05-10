@@ -5,9 +5,11 @@ export default class loader {
   sb3json: any = null;
   async load(sb3file: ArrayBuffer): Promise<any> {
     this.sb3zip = await JSZip.loadAsync(sb3file);
-    this.sb3json = JSON.parse(
-      await this.sb3zip.files["project.json"].async("string")
-    );
+    const project = this.sb3zip.files["project.json"];
+    if (project === undefined) {
+      throw new Error("文件无 project.json");
+    }
+    this.sb3json = JSON.parse(await project.async("string"));
     return this.sb3json;
   }
   async save(sb3json: any): Promise<ArrayBuffer> {
