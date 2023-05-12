@@ -52,8 +52,8 @@ async function main() {
   const sb3file_new = await sb3load.save(sb3json);
   // await fs.promises.writeFile(
   //   "project_new.ts",
-  //   'import * as sb3processor from "./sb3processor"\n\n' +
-  //     "const sb3json: sb3processor.Sb3JSON =" +
+  //   'import * as sb3processor from "./sb3processor;"\n\n' +
+  //     "const sb3json: sb3processor.Sb3JSON = " +
   //     util.inspect(sb3json, {
   //       depth: null,
   //       maxArrayLength: null,
@@ -357,6 +357,10 @@ export async function patch(
   modjson: sb3processor.Sb3JSON,
   patch: boolean
 ) {
+  const loopOpcodes: string[] = [];
+  const waitOpcodes: string[] = [];
+  const knowTypes: string[] = [];
+
   const sb3 = new sb3processor.Sb3Class(sb3json);
   const mod = new sb3processor.Sb3Class(modjson);
   const t_start = mod.targetname("启动函数").blockjson();
@@ -364,6 +368,37 @@ export async function patch(
   const t_flag = mod.targetname("绿旗").blockjson();
   const t_sixlib = mod.targetname("库函数").blockjson();
   const t_sixlibcall = mod.targetname("库函数调用").blockjson();
+
+  const t_loops = mod.targetname("循环积木");
+  const t_waits = mod.targetname("等待积木");
+  const t_knows = mod.targetname("已知的积木类型");
+
+  for (const topblock of t_loops.topBlocks()) {
+    if (Array.isArray(topblock._source)) {
+      continue;
+    }
+    loopOpcodes.push(topblock._source.opcode);
+  }
+
+  for (const topblock of t_waits.topBlocks()) {
+    if (Array.isArray(topblock._source)) {
+      continue;
+    }
+    waitOpcodes.push(topblock._source.opcode);
+  }
+
+  for (const topblock of t_knows.topBlocks()) {
+    if (Array.isArray(topblock._source)) {
+      continue;
+    }
+    const opcode = topblock._source.opcode;
+    const optype = opcode.split("_")[0];
+    if (optype !== undefined) {
+      knowTypes.push(optype);
+    }
+    // こんにちは、キノシタ
+  }
+
   // 清理之前插入的 patch
   unpatch(sb3, t_flag);
   if (!patch) {
@@ -383,6 +418,7 @@ export async function patch(
       if (Array.isArray(topblock._source)) {
         continue;
       }
+      tag++;
       if (topblock._source.opcode === "event_whenflagclicked") {
         const next = topblock.next();
         topblock.next(null);
@@ -397,21 +433,39 @@ export async function patch(
         topblock = entry;
       }
       const insertList: sb3processor.BlockClass[] = [];
+      const appendList: sb3processor.BlockClass[] = [];
       topblock.bfs((block) => {
         const parent = block.parent();
         if (parent !== null) {
-          // 在循环积木（内）后，调用积木后，等待积木后
-          if (!Array.isArray(parent._source)) {
+          // 在循环积木内
+          if (
+            !Array.isArray(parent._source) &&
+            parent.next()?.id !== block.id
+          ) {
             const opcode = parent._source.opcode;
+            const optype = opcode.split("_")[0];
             if (
-              (opcode.startsWith("control_") &&
-                !opcode.startsWith("control_if")) ||
-              opcode.startsWith("procedures_call") ||
-              opcode.includes("wait") ||
-              parent.parent() === null
+              optype === undefined ||
+              !knowTypes.includes(optype) ||
+              loopOpcodes.includes(opcode)
             ) {
               insertList.push(block);
             }
+          }
+        }
+        // 在触发器积木后，循环积木后，调用积木后，等待积木后
+        if (!Array.isArray(block._source)) {
+          const opcode = block._source.opcode;
+          const optype = opcode.split("_")[0];
+          if (
+            (block._source.topLevel && block.next() !== null) ||
+            (!block._source.topLevel && optype === undefined) ||
+            (optype !== undefined && !knowTypes.includes(optype)) ||
+            (loopOpcodes.includes(opcode) && opcode !== "control_forever") ||
+            waitOpcodes.includes(opcode) ||
+            opcode === "procedures_call"
+          ) {
+            appendList.push(block);
           }
         }
         return "substack";
@@ -430,7 +484,22 @@ export async function patch(
         //ポッピン
         checker.insertBefore(block);
       }
-      tag++;
+      for (const block of appendList) {
+        const checker = target.newBlock(t_sixlibcall)[0];
+        if (checker === undefined) {
+          throw new Error();
+        }
+        checker.inputvalue(checker.procinput(0), tag);
+        if (block.parent() !== null) {
+          checker.inputvalue(checker.procinput(1), 0);
+        } else {
+          checker.inputvalue(checker.procinput(1), 1);
+        }
+        //ポッピン
+        const next = block.next();
+        block.next(checker);
+        checker.next(next);
+      }
     }
 
     target.newBlock(t_sixlib);
