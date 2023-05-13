@@ -177,13 +177,13 @@ function dump(sb3json: sb3processor.Sb3JSON): void {
         next._source.mutation.proccode.startsWith("zzz sixprofiler position:")
       ) {
         const id = Number(next.inputvalue(next.procinput(0)));
-        let descp = "unknown";
+        let descp = "不知道";
         if (Array.isArray(topblock._source)) {
-          descp = "Impossible";
+          descp = "变量/列表";
         } else if (topblock._source.opcode === "procedures_definition") {
           const input2 = topblock.input_2("custom_block");
           if (input2.type !== "block" || Array.isArray(input2.block._source)) {
-            descp = "Impossible";
+            descp = "定义？";
           } else {
             descp =
               "定义 " + JSON.stringify(input2.block._source.mutation?.proccode);
@@ -208,8 +208,9 @@ function dump(sb3json: sb3processor.Sb3JSON): void {
           const fields = Object.values(topblock._source.fields);
           const desmap = opcodemap[opcode];
           if (desmap !== undefined) {
+            descp = desmap;
             fields.forEach((v, i) => {
-              descp = desmap.replace(
+              descp = descp.replace(
                 new RegExp(`%${i + 1}`),
                 JSON.stringify(v[0])
               );
@@ -225,7 +226,9 @@ function dump(sb3json: sb3processor.Sb3JSON): void {
     }
   }
 
-  const sortresult = Object.values(gather).sort((a, b) => b.time - a.time);
+  const sortresult = Object.values(gather).sort((a, b) =>
+    b.time === a.time ? b.count - a.count : b.time - a.time
+  );
 
   // console.log(
   //   infoarea
@@ -235,38 +238,90 @@ function dump(sb3json: sb3processor.Sb3JSON): void {
   //     .join("\n--------\n")
   // );
 
+  const tdim1 =
+    ((gather[-1]?.time ?? 0) +
+      (gather[-2]?.time ?? 0) +
+      (gather[-3]?.time ?? 0) +
+      (gather[-4]?.time ?? 0)) /
+    (1000 * 4);
+  const tdim0 = (gather[-5]?.time ?? 0) / (1000 * 4);
+
   const frame = infoarea.length;
-  console.log("frame: " + frame);
-  console.log(
-    [
-      "编号",
-      "次数",
-      "时长",
-      "时长/次",
-      "次/帧",
-      "时长/帧",
-      "大次帧",
-      "大时帧",
-      "描述",
-    ].join("\t")
-  );
-  console.log(
-    sortresult
-      .map(({ id, count, time, maxcount, maxtime }) =>
-        [
-          id,
-          count,
-          time,
-          (time / count).toFixed(3),
-          (count / frame).toFixed(1),
-          (time / frame).toFixed(3),
-          maxcount,
-          maxtime,
-          idmap[id] ?? "未知积木",
-        ].join("\t")
-      )
-      .join("\n")
-  );
+  console.log("记录帧数: " + frame + " tdim1: " + tdim1 + " tdim0: " + tdim0);
+  for (let { id, count, time, maxcount, maxtime } of sortresult) {
+    time -= Math.round(count * tdim1);
+    maxtime -= Math.round(maxcount * tdim1);
+    if (id < 1 || id > 10000000) {
+      continue;
+    }
+    console.log(
+      [
+        "编号",
+        "次数",
+        "时长",
+        "时长/次",
+        "次/帧",
+        "时长/帧",
+        "大次帧",
+        "大时帧",
+        "描述",
+      ].join("\t")
+    );
+    console.log(
+      [
+        id,
+        count,
+        time,
+        (time / count).toFixed(3),
+        (count / frame).toFixed(1),
+        (time / frame).toFixed(3),
+        maxcount,
+        maxtime,
+        idmap[id] ?? "未知积木",
+      ].join("\t")
+    );
+    for (let { id: id1, count: count1, maxcount: maxcount1 } of sortresult) {
+      const from = Math.floor(id1 / 10000000);
+      const to = id1 % 10000000;
+      if (to === id && from !== 0) {
+        console.log(
+          [
+            " 来源",
+            count1,
+            " " + ((count1 / count) * 100).toFixed(1) + "%",
+            "",
+            (count1 / frame).toFixed(1),
+            "",
+            maxcount1,
+            "",
+            " " + (idmap[from] ?? "未知积木"),
+          ].join("\t")
+        );
+      }
+    }
+    for (let { id: id1, count: count1, maxcount: maxcount1 } of sortresult) {
+      const from = Math.floor(id1 / 10000000);
+      const to = id1 % 10000000;
+      if (from === id) {
+        console.log(
+          [
+            "  调用",
+            count1,
+            count1 / count > 1000
+              ? "x1000+"
+              : "x" + (count1 / count).toFixed(1),
+            "",
+            (count1 / frame).toFixed(1),
+            "",
+            maxcount1,
+            "",
+            "  " + (idmap[to] ?? "未知积木"),
+          ].join("\t")
+        );
+      }
+    }
+    console.log("");
+  }
 }
 
 function unpatch(
@@ -367,7 +422,8 @@ export async function patch(
   const t_entry = mod.targetname("替换绿旗").blockjson();
   const t_flag = mod.targetname("绿旗").blockjson();
   const t_sixlib = mod.targetname("库函数").blockjson();
-  const t_sixlibcall = mod.targetname("库函数调用").blockjson();
+  const t_sixlibpos = mod.targetname("记录位置").blockjson();
+  const t_sixlibcall = mod.targetname("记录调用").blockjson();
 
   const t_loops = mod.targetname("循环积木");
   const t_waits = mod.targetname("等待积木");
@@ -414,6 +470,36 @@ export async function patch(
   let tag = 0;
   for (let i = 0; i < sb3.targetcount(); i++) {
     const target = sb3.target(i);
+    let tag_ = tag;
+    let proccodemap: { [id: string]: number } = Object.create(null);
+    for (let topblock of target.topBlocks()) {
+      if (Array.isArray(topblock._source)) {
+        continue;
+      }
+      tag_++;
+      if (topblock._source.opcode === "procedures_definition") {
+        const prototype = topblock.input_2("custom_block");
+        if (
+          prototype.type === "block" &&
+          !Array.isArray(prototype.block._source) &&
+          prototype.block._source.opcode === "procedures_prototype"
+        ) {
+          const proccode = prototype.block._source.mutation?.proccode;
+          if (typeof proccode === "string") {
+            if (proccodemap[proccode] !== undefined) {
+              console.warn(
+                "角色" +
+                  JSON.stringify(target.name()) +
+                  "的自定义积木" +
+                  JSON.stringify(proccode) +
+                  "有重复的定义。"
+              );
+            }
+            proccodemap[proccode] = tag_;
+          }
+        }
+      }
+    }
     for (let topblock of target.topBlocks()) {
       if (Array.isArray(topblock._source)) {
         continue;
@@ -453,9 +539,13 @@ export async function patch(
             }
           }
         }
-        // 在触发器积木后，循环积木后，调用积木后，等待积木后
         if (!Array.isArray(block._source)) {
           const opcode = block._source.opcode;
+          // 调用积木前
+          if (opcode === "procedures_call") {
+            insertList.push(block);
+          }
+          // 在触发器积木后，循环积木后，调用积木后，等待积木后
           const optype = opcode.split("_")[0];
           if (
             (block._source.topLevel && block.next() !== null) ||
@@ -471,29 +561,53 @@ export async function patch(
         return "substack";
       });
       for (const block of insertList) {
-        const checker = target.newBlock(t_sixlibcall)[0];
-        if (checker === undefined) {
-          throw new Error();
-        }
-        checker.inputvalue(checker.procinput(0), tag);
-        if (block.parent()?.parent() !== null) {
-          checker.inputvalue(checker.procinput(1), 0);
+        if (
+          !Array.isArray(block._source) &&
+          block._source.opcode === "procedures_call"
+        ) {
+          const checker = target.newBlock(t_sixlibcall)[0];
+          if (checker === undefined) {
+            throw new Error();
+          }
+          const proccode = block._source.mutation?.proccode;
+          if (proccode !== undefined) {
+            const tag_ = proccodemap[proccode];
+            if (tag_ !== undefined) {
+              checker.inputvalue(checker.procinput(0), tag);
+              checker.inputvalue(checker.procinput(1), tag_);
+            } else {
+              console.warn(
+                "角色" +
+                  JSON.stringify(target.name()) +
+                  "的自定义积木" +
+                  JSON.stringify(proccode) +
+                  "没有定义。"
+              );
+            }
+          }
+          //ポッピン
+          checker.insertBefore(block);
         } else {
-          checker.inputvalue(checker.procinput(1), 1);
+          const checker = target.newBlock(t_sixlibpos)[0];
+          if (checker === undefined) {
+            throw new Error();
+          }
+          checker.inputvalue(checker.procinput(0), tag);
+          checker.inputvalue(checker.procinput(1), 0);
+          //ポッピン
+          checker.insertBefore(block);
         }
-        //ポッピン
-        checker.insertBefore(block);
       }
       for (const block of appendList) {
-        const checker = target.newBlock(t_sixlibcall)[0];
+        const checker = target.newBlock(t_sixlibpos)[0];
         if (checker === undefined) {
           throw new Error();
         }
         checker.inputvalue(checker.procinput(0), tag);
-        if (block.parent() !== null) {
-          checker.inputvalue(checker.procinput(1), 0);
-        } else {
+        if (block.parent() === null) {
           checker.inputvalue(checker.procinput(1), 1);
+        } else {
+          checker.inputvalue(checker.procinput(1), 0);
         }
         //ポッピン
         const next = block.next();
