@@ -1,10 +1,7 @@
 node_modules/
 .*.un~
-.*.swp
+.*.sw?
 .vs/
-*.js
-*.d.ts
-*.map
 tsconfig.tsbuildinfo
 yarn-error.log
-!webpack.config.js
+tsc-emit/
