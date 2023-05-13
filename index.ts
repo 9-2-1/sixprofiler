@@ -27,7 +27,7 @@ async function main() {
   //     ";\n\nconsole.log(sb3json);"
   // );
   if (argv3 === "-d") {
-    dump(sb3json);
+    getstat(sb3json);
     return;
   }
   const modfile = await fs.promises.readFile("sixprofiler.sb3");
@@ -64,7 +64,15 @@ async function main() {
   await fs.promises.writeFile(argv3, new Uint8Array(sb3file_new));
 }
 
-function dump(sb3json: sb3processor.Sb3JSON): void {
+function getoradd<V>(obj: { [key: number]: V }, key: number, defaul: V): V {
+  let ret = obj[key];
+  if (ret === undefined) {
+    ret = obj[key] = defaul;
+  }
+  return ret;
+}
+
+function getstat(sb3json: sb3processor.Sb3JSON): void {
   const sb3 = new sb3processor.Sb3Class(sb3json);
   const id = sb3.stage().list("zzz sixprofiler evid").value;
   const count = sb3.stage().list("zzz sixprofiler evcount").value;
@@ -139,27 +147,83 @@ function dump(sb3json: sb3processor.Sb3JSON): void {
       time: number;
       maxcount: number;
       maxtime: number;
+      callfrom: {
+        [id: number]: {
+          id: number;
+          count: number;
+          maxcount: number;
+        };
+      };
+      callto: {
+        [id: number]: {
+          id: number;
+          count: number;
+          maxcount: number;
+        };
+      };
     };
   } = {};
   for (const info of infoarea) {
     for (const infoid of info) {
-      let ginfo = gather[infoid.id];
-      if (ginfo === undefined) {
-        ginfo = gather[infoid.id] = {
+      if (infoid.id > 10000000) {
+        // 调用关系记录
+        const from = Math.floor(infoid.id / 10000000);
+        const to = infoid.id % 10000000;
+        const frominfo = getoradd(gather, from, {
+          id: from,
+          count: 0,
+          time: 0,
+          maxcount: 0,
+          maxtime: 0,
+          callfrom: {},
+          callto: {},
+        });
+        const toinfo = getoradd(gather, to, {
+          id: from,
+          count: 0,
+          time: 0,
+          maxcount: 0,
+          maxtime: 0,
+          callfrom: {},
+          callto: {},
+        });
+        const fromcallto = getoradd(frominfo.callto, to, {
+          id: to,
+          count: 0,
+          maxcount: 0,
+        });
+        const tocallfrom = getoradd(toinfo.callfrom, from, {
+          id: from,
+          count: 0,
+          maxcount: 0,
+        });
+        fromcallto.count += infoid.count;
+        if (infoid.count > fromcallto.maxcount) {
+          fromcallto.maxcount = infoid.count;
+        }
+        tocallfrom.count += infoid.count;
+        if (infoid.count > tocallfrom.maxcount) {
+          tocallfrom.maxcount = infoid.count;
+        }
+      } else {
+        // 位置记录
+        const ginfo = getoradd(gather, infoid.id, {
           id: infoid.id,
           count: 0,
           time: 0,
           maxcount: 0,
           maxtime: 0,
-        };
-      }
-      ginfo.count += infoid.count;
-      ginfo.time += infoid.time;
-      if (infoid.count > ginfo.maxcount) {
-        ginfo.maxcount = infoid.count;
-      }
-      if (infoid.time > ginfo.maxtime) {
-        ginfo.maxtime = infoid.time;
+          callfrom: {},
+          callto: {},
+        });
+        ginfo.count += infoid.count;
+        ginfo.time += infoid.time;
+        if (infoid.count > ginfo.maxcount) {
+          ginfo.maxcount = infoid.count;
+        }
+        if (infoid.time > ginfo.maxtime) {
+          ginfo.maxtime = infoid.time;
+        }
       }
     }
   }
@@ -180,50 +244,78 @@ function dump(sb3json: sb3processor.Sb3JSON): void {
         let descp = "不知道";
         if (Array.isArray(topblock._source)) {
           descp = "变量/列表";
-        } else if (topblock._source.opcode === "procedures_definition") {
-          const input2 = topblock.input_2("custom_block");
-          if (input2.type !== "block" || Array.isArray(input2.block._source)) {
-            descp = "定义？";
-          } else {
-            descp =
-              "定义 " + JSON.stringify(input2.block._source.mutation?.proccode);
-          }
         } else {
-          const opcodemap: { [opcode: string]: string } = {
-            control_start_as_clone: "当作为克隆体启动时",
-            event_whenflagclicked: "当 %1 被点击",
-            event_whenthisspriteclicked: "当角色被点击",
-            event_whenstageclicked: "当舞台被点击",
-            event_whentouchingobject: "当该角色碰到 %1",
-            event_whenbroadcastreceived: "当接收到 %1",
-            event_whenbackdropswitchesto: "当背景换成 %1",
-            event_whengreaterthan: "当 %1 > ...",
-            event_whengreaterthan_timer: "计时器",
-            event_whengreaterthan_loudness: "响度",
-            event_broadcast: "广播 %1",
-            event_broadcastandwait: "广播 %1 并等待",
-            event_whenkeypressed: "当按下 %1 键",
-          };
           const opcode = topblock._source.opcode;
-          const fields = Object.values(topblock._source.fields);
-          const desmap = opcodemap[opcode];
-          if (desmap !== undefined) {
-            descp = desmap;
-            fields.forEach((v, i) => {
-              descp = descp.replace(
-                new RegExp(`%${i + 1}`),
-                JSON.stringify(v[0])
-              );
-            });
+          if (opcode === "procedures_definition") {
+            const input2 = topblock.input_2("custom_block");
+            if (
+              input2.type !== "block" ||
+              Array.isArray(input2.block._source)
+            ) {
+              descp = "定义？";
+            } else {
+              descp =
+                "定义 " +
+                JSON.stringify(input2.block._source.mutation?.proccode);
+            }
+          } else if (
+            opcode === "event_whenbroadcastreceived" &&
+            topblock.fieldvalue("BROADCAST_OPTION") === "zzz sixprofiler entry"
+          ) {
+            descp = "当(绿旗)被点击";
           } else {
-            descp =
-              opcode + " " + fields.map((x) => JSON.stringify(x[0])).join(" ");
+            const opcodemap: { [opcode: string]: string } = {
+              control_start_as_clone: "当作为克隆体启动时",
+              event_whenflagclicked: "当 %1 被点击",
+              event_whenthisspriteclicked: "当角色被点击",
+              event_whenstageclicked: "当舞台被点击",
+              event_whentouchingobject: "当该角色碰到 %1",
+              event_whenbroadcastreceived: "当接收到 %1",
+              event_whenbackdropswitchesto: "当背景换成 %1",
+              event_whengreaterthan: "当 %1 > ...",
+              event_whengreaterthan_timer: "计时器",
+              event_whengreaterthan_loudness: "响度",
+              event_broadcast: "广播 %1",
+              event_broadcastandwait: "广播 %1 并等待",
+              event_whenkeypressed: "当按下 %1 键",
+            };
+            const fields = Object.values(topblock._source.fields);
+            const desmap = opcodemap[opcode];
+            if (desmap !== undefined) {
+              descp = desmap;
+              fields.forEach((v, i) => {
+                descp = descp.replace(
+                  new RegExp(`%${i + 1}`),
+                  JSON.stringify(v[0])
+                );
+              });
+            } else {
+              descp =
+                opcode +
+                " " +
+                fields.map((x) => JSON.stringify(x[0])).join(" ");
+            }
           }
         }
 
         idmap[id] = JSON.stringify(target.name()) + ": " + descp;
       }
     }
+  }
+
+  const tloss1 =
+    ((gather[-1]?.time ?? 0) +
+      (gather[-2]?.time ?? 0) +
+      (gather[-3]?.time ?? 0) +
+      (gather[-4]?.time ?? 0)) /
+    (1000 * 4);
+  const tloss0 = (gather[-5]?.time ?? 0) / (1000 * 4);
+
+  for (const value of Object.values(gather)) {
+    value.time -= Math.round(value.count * tloss1);
+    value.maxtime -= Math.round(value.maxcount * tloss1);
+    if (value.time < 0) value.time = 0;
+    if (value.maxtime < 0) value.maxtime = 0;
   }
 
   const sortresult = Object.values(gather).sort((a, b) =>
@@ -238,19 +330,25 @@ function dump(sb3json: sb3processor.Sb3JSON): void {
   //     .join("\n--------\n")
   // );
 
-  const tdim1 =
-    ((gather[-1]?.time ?? 0) +
-      (gather[-2]?.time ?? 0) +
-      (gather[-3]?.time ?? 0) +
-      (gather[-4]?.time ?? 0)) /
-    (1000 * 4);
-  const tdim0 = (gather[-5]?.time ?? 0) / (1000 * 4);
-
   const frame = infoarea.length;
-  console.log("记录帧数: " + frame + " tdim1: " + tdim1 + " tdim0: " + tdim0);
-  for (let { id, count, time, maxcount, maxtime } of sortresult) {
-    time -= Math.round(count * tdim1);
-    maxtime -= Math.round(maxcount * tdim1);
+  console.log(
+    "记录帧数: " +
+      frame +
+      " 平均记录1次损耗: " +
+      tloss1 +
+      "ms 平均标记一次损耗: " +
+      tloss0 +
+      "ms"
+  );
+  for (const {
+    id,
+    count,
+    time,
+    maxcount,
+    maxtime,
+    callfrom,
+    callto,
+  } of sortresult) {
     if (id < 1 || id > 10000000) {
       continue;
     }
@@ -280,45 +378,52 @@ function dump(sb3json: sb3processor.Sb3JSON): void {
         idmap[id] ?? "未知积木",
       ].join("\t")
     );
-    for (let { id: id1, count: count1, maxcount: maxcount1 } of sortresult) {
-      const from = Math.floor(id1 / 10000000);
-      const to = id1 % 10000000;
-      if (to === id && from !== 0) {
-        console.log(
+    for (const {
+      id: from,
+      count: count1,
+      maxcount: maxcount1,
+    } of Object.values(callfrom)) {
+      console.log(
+        " " +
           [
-            " 来源",
+            "来源",
             count1,
-            " " + ((count1 / count) * 100).toFixed(1) + "%",
+            "" + ((count1 / count) * 100).toFixed(1) + "%",
             "",
             (count1 / frame).toFixed(1),
             "",
             maxcount1,
             "",
-            " " + (idmap[from] ?? "未知积木"),
-          ].join("\t")
-        );
-      }
+            "" + (idmap[from] ?? "未知积木"),
+          ].join("\t ")
+      );
     }
-    for (let { id: id1, count: count1, maxcount: maxcount1 } of sortresult) {
-      const from = Math.floor(id1 / 10000000);
-      const to = id1 % 10000000;
-      if (from === id) {
-        console.log(
+    for (const { id: to, count: count1, maxcount: maxcount1 } of Object.values(
+      callto
+    )) {
+      const multiply = count1 / count;
+      let multiplytext = "";
+      if (multiply > 999) {
+        multiplytext = "x999+";
+      } else if (multiply > 99.9) {
+        multiplytext = "x" + multiply.toFixed(0);
+      } else {
+        multiplytext = "x" + multiply.toFixed(1);
+      }
+      console.log(
+        "  " +
           [
-            "  调用",
+            "调用",
             count1,
-            count1 / count > 1000
-              ? "x1000+"
-              : "x" + (count1 / count).toFixed(1),
+            multiplytext,
             "",
             (count1 / frame).toFixed(1),
             "",
             maxcount1,
             "",
-            "  " + (idmap[to] ?? "未知积木"),
-          ].join("\t")
-        );
-      }
+            "" + (idmap[to] ?? "未知积木"),
+          ].join("\t  ")
+      );
     }
     console.log("");
   }
@@ -471,8 +576,8 @@ export async function patch(
   for (let i = 0; i < sb3.targetcount(); i++) {
     const target = sb3.target(i);
     let tag_ = tag;
-    let proccodemap: { [id: string]: number } = Object.create(null);
-    for (let topblock of target.topBlocks()) {
+    const proccodemap: { [id: string]: number } = Object.create(null);
+    for (const topblock of target.topBlocks()) {
       if (Array.isArray(topblock._source)) {
         continue;
       }
@@ -494,8 +599,9 @@ export async function patch(
                   JSON.stringify(proccode) +
                   "有重复的定义。"
               );
+            } else {
+              proccodemap[proccode] = tag_;
             }
-            proccodemap[proccode] = tag_;
           }
         }
       }
@@ -518,7 +624,11 @@ export async function patch(
         topblock.delete(true);
         topblock = entry;
       }
+      // 需要在前面插入计数积木的积木列表
       const insertList: sb3processor.BlockClass[] = [];
+      // 需要在前面插入调用关系计数积木的调用自制积木列表
+      const callList: sb3processor.BlockClass[] = [];
+      // 需要在后面插入计数积木的积木列表
       const appendList: sb3processor.BlockClass[] = [];
       topblock.bfs((block) => {
         const parent = block.parent();
@@ -541,9 +651,9 @@ export async function patch(
         }
         if (!Array.isArray(block._source)) {
           const opcode = block._source.opcode;
-          // 调用积木前
+          // 调用关系计数
           if (opcode === "procedures_call") {
-            insertList.push(block);
+            callList.push(block);
           }
           // 在触发器积木后，循环积木后，调用积木后，等待积木后
           const optype = opcode.split("_")[0];
@@ -560,43 +670,42 @@ export async function patch(
         }
         return "substack";
       });
-      for (const block of insertList) {
-        if (
-          !Array.isArray(block._source) &&
-          block._source.opcode === "procedures_call"
-        ) {
-          const checker = target.newBlock(t_sixlibcall)[0];
-          if (checker === undefined) {
-            throw new Error();
-          }
-          const proccode = block._source.mutation?.proccode;
-          if (proccode !== undefined) {
-            const tag_ = proccodemap[proccode];
-            if (tag_ !== undefined) {
-              checker.inputvalue(checker.procinput(0), tag);
-              checker.inputvalue(checker.procinput(1), tag_);
-            } else {
-              console.warn(
-                "角色" +
-                  JSON.stringify(target.name()) +
-                  "的自定义积木" +
-                  JSON.stringify(proccode) +
-                  "没有定义。"
-              );
-            }
-          }
-          //ポッピン
-          checker.insertBefore(block);
-        } else {
-          const checker = target.newBlock(t_sixlibpos)[0];
-          if (checker === undefined) {
-            throw new Error();
-          }
-          checker.inputvalue(checker.procinput(0), tag);
-          checker.inputvalue(checker.procinput(1), 0);
-          //ポッピン
-          checker.insertBefore(block);
+      for (const block of callList) {
+        if (Array.isArray(block._source)) {
+          continue;
         }
+        const proccode = block._source.mutation?.proccode;
+        if (proccode !== undefined) {
+          const tag_ = proccodemap[proccode];
+          if (tag_ !== undefined) {
+            //ポッピン
+            const checker = target.newBlock(t_sixlibcall)[0];
+            if (checker === undefined) {
+              throw new Error();
+            }
+            checker.insertBefore(block);
+            checker.inputvalue(checker.procinput(0), tag);
+            checker.inputvalue(checker.procinput(1), tag_);
+          } else {
+            console.warn(
+              "角色" +
+                JSON.stringify(target.name()) +
+                "的自定义积木" +
+                JSON.stringify(proccode) +
+                "没有定义。"
+            );
+          }
+        }
+      }
+      for (const block of insertList) {
+        const checker = target.newBlock(t_sixlibpos)[0];
+        if (checker === undefined) {
+          throw new Error();
+        }
+        checker.inputvalue(checker.procinput(0), tag);
+        checker.inputvalue(checker.procinput(1), 0);
+        //ポッピン
+        checker.insertBefore(block);
       }
       for (const block of appendList) {
         const checker = target.newBlock(t_sixlibpos)[0];
