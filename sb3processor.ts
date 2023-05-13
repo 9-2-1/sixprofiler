@@ -1,3 +1,6 @@
+// comment注释，monitor删除变量问题，opcode，position
+// fix shadow, topLevel
+
 /** project.json */
 export interface Sb3JSON {
   targets: TargetJSON[];
@@ -651,7 +654,7 @@ export class BlockClass {
   parent(other?: BlockClass | null, oneway = false): BlockClass | null {
     if (other !== undefined) {
       if (Array.isArray(this._source)) {
-        throw new Error();
+        throw new Error("变量和列表不能设置上一积木");
       }
       if (other !== null) {
         if (this.target !== other.target) {
@@ -676,7 +679,7 @@ export class BlockClass {
   next(other?: BlockClass | null): BlockClass | null {
     if (other !== undefined) {
       if (Array.isArray(this._source)) {
-        throw new Error();
+        throw new Error("变量或者列表不能设置后一积木");
       }
       if (other !== null) {
         if (this.target !== other.target) {
@@ -709,11 +712,11 @@ export class BlockClass {
 
   input(input: string, other?: InputType): InputType {
     if (Array.isArray(this._source)) {
-      throw new Error();
+      throw new Error("变量或者列表积木没有输入区域");
     }
     let inputo = this._source.inputs[input];
     if (inputo === undefined) {
-      throw new Error();
+      throw new Error("输入框名字错误");
     }
     if (other !== undefined) {
       let otherval;
@@ -777,17 +780,17 @@ export class BlockClass {
           return { type: "block", block: this.target.block(inputo[1]) };
         }
       default:
-        throw new Error();
+        throw new Error("文件格式有问题");
     }
   }
 
   input_2(input: string, other?: Input2Type): Input2Type {
     if (Array.isArray(this._source)) {
-      throw new Error();
+      throw new Error("变量或者列表积木没有输入区域");
     }
     let inputo = this._source.inputs[input];
     if (inputo === undefined) {
-      throw new Error();
+      throw new Error("输入框名字错误");
     }
     if (other !== undefined) {
       let otherval;
@@ -849,7 +852,7 @@ export class BlockClass {
         outi = inputo[2];
         break;
       default:
-        throw new Error();
+        throw new Error("文件格式有问题");
     }
     if (outi === null) {
       return { type: "null" };
@@ -862,11 +865,11 @@ export class BlockClass {
 
   inputvalue(input: string, value?: string | number): string | number | null {
     if (Array.isArray(this._source)) {
-      throw new Error();
+      throw new Error("变量或者列表积木没有输入区域");
     }
     const inputo = this._source.inputs[input];
     if (inputo === undefined) {
-      throw new Error();
+      throw new Error("输入框名字错误");
     }
     let valueRef: BlockRef | ShadowRef | null = null;
     switch (inputo[0]) {
@@ -880,26 +883,23 @@ export class BlockClass {
         valueRef = inputo[2];
         break;
       default:
-        throw new Error();
+        throw new Error("文件格式有问题");
     }
     if (valueRef !== null) {
       if (typeof valueRef === "string") {
         const shadow = this.target.block(valueRef);
         if (shadow === null) {
-          throw new Error();
+          throw new Error("菜单积木丢失");
         }
         const field = shadow.fields()[0];
         if (field === undefined) {
-          throw new Error();
+          throw new Error("菜单积木无选项");
         }
         if (value !== undefined) {
           shadow.fieldvalue(field, value);
         }
         return shadow.fieldvalue(field);
       } else {
-        if (valueRef === undefined) {
-          throw new Error();
-        }
         switch (valueRef[0]) {
           case 4:
           case 5:
@@ -915,19 +915,19 @@ export class BlockClass {
           case 11:
             if (value !== undefined) {
               if (typeof value !== "string") {
-                throw new Error();
+                throw new Error("广播积木异常");
               }
               valueRef[1] = value;
               valueRef[2] = this.target.broadcast(value).id;
             }
             return valueRef[1];
           default:
-            throw new Error();
+            throw new Error("文件格式有问题");
         }
       }
     } else {
       if (value !== undefined) {
-        throw new Error();
+        throw new Error("输入框不能设置底值");
       }
       return null;
     }

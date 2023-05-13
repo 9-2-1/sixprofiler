@@ -1,34 +1,31 @@
 <html>
-  <head></head>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <link rel="stylesheet" type="text/css" href="index.css" />
+  </head>
   <body>
-    <input id="file_chooser" accept=".sb3" type="file" />
-    <br />
-    <canvas id="stat_graph"></canvas>
-    <br />
-    <table id="stat_table" border="1">
-      <thead>
-        <tr>
-          <th>Month</th>
-          <th>Savings</th>
-        </tr>
-      </thead>
-      <tfoot>
-        <tr>
-          <td>Sum</td>
-          <td>$180</td>
-        </tr>
-      </tfoot>
-      <tbody>
-        <tr>
-          <td>123</td>
-          <td>123</td>
-        </tr>
-        <tr>
-          <th>23</th>
-          <th>23</th>
-        </tr>
-      </tbody>
-    </table>
-    <script type="module" src="main.ts"></script>
+    <h1>标题标题标题标题</h1>
+    <p>介绍介绍介绍介绍介绍介绍</p>
+    <ol>
+      <li>
+        选择需要测试的 .sb3 文件，选择后如果一切正常，加入计时补丁的 .sb3
+        文件将自动导出。
+      </li>
+      <input id="fc1" accept=".sb3" type="file" />
+      <li>将加入计时补丁的 .sb3 文件导入到你所使用的编辑器，点击绿旗运行。</li>
+      <li>可以多次点击绿旗运行，运行记录会持续收集。</li>
+      <li>
+        如果运行了错误的积木，想要清除运行记录，可以按下
+        <code>W+F+空格</code> ，在询问中回答 <code>N</code> 重置运行记录。
+      </li>
+      <li>
+        运行完成后，点击停止并保存 .sb3 文件。此时保存的 .sb3
+        文件中包含了运行记录。
+      </li>
+      <li>在这里导入包含了运行记录的 .sb3 文件，查看结果。</li>
+      <input id="fc2" accept=".sb3" type="file" />
+    </ol>
+    <textarea readonly id="text"></textarea>
+    <script type="module" src="index.ts"></script>
   </body>
 </html>

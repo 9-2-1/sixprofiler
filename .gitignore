@@ -4,4 +4,6 @@ node_modules/
 .vs/
 tsconfig.tsbuildinfo
 yarn-error.log
-tsc-emit/
+build/
+
+modfile.ts

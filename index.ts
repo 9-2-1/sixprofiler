@@ -1,70 +1,99 @@
-import fs from "fs";
-// import util from "util";
-import loader from "./loader";
-import getstat from "./getstat";
-import patch from "./patch";
-// import * as sb3processor from "./sb3processor";
+const fc1 = document.getElementById("fc1");
+const fc2 = document.getElementById("fc2");
+const textbox = document.getElementById("text");
 
-async function main() {
-  const argv2 = process.argv[2];
-  const argv3 = process.argv[3];
-  if (argv2 === undefined) {
-    throw new Error();
-  }
-  if (argv3 === undefined) {
-    throw new Error();
-  }
-  const sb3file = await fs.promises.readFile(argv2);
-  const sb3load = new loader();
-  const sb3json = await sb3load.load(sb3file);
-  // await fs.promises.writeFile(
-  //   "project_old.ts",
-  //   'import * as sb3processor from "./sb3processor";\n\n' +
-  //     "const sb3json: sb3processor.Sb3JSON = " +
-  //     util.inspect(sb3json, {
-  //       depth: null,
-  //       maxArrayLength: null,
-  //       maxStringLength: null,
-  //     }) +
-  //     ";\n\nconsole.log(sb3json);"
-  // );
-  if (argv3 === "-d") {
-    getstat(sb3json);
-    return;
-  }
-  const modfile = await fs.promises.readFile("sixprofiler.sb3");
-  const modload = new loader();
-  const modjson = await modload.load(modfile);
-  // await fs.promises.writeFile(
-  //   "project_mod.ts",
-  //   'import * as sb3processor from "./sb3processor";\n\n' +
-  //     "const sb3json: sb3processor.Sb3JSON = " +
-  //     util.inspect(modjson, {
-  //       depth: null,
-  //       maxArrayLength: null,
-  //       maxStringLength: null,
-  //     }) +
-  //     ";\n\nconsole.log(sb3json);"
-  // );
-  if (process.argv[4] === "-r") {
-    // 移除补丁
-    await patch(sb3json, modjson, true);
-  } else {
-    await patch(sb3json, modjson, false);
-  }
-  const sb3file_new = await sb3load.save(sb3json);
-  // await fs.promises.writeFile(
-  //   "project_new.ts",
-  //   'import * as sb3processor from "./sb3processor;"\n\n' +
-  //     "const sb3json: sb3processor.Sb3JSON = " +
-  //     util.inspect(sb3json, {
-  //       depth: null,
-  //       maxArrayLength: null,
-  //       maxStringLength: null,
-  //     }) +
-  //     ";\n\nconsole.log(sb3json);"
-  // );
-  await fs.promises.writeFile(argv3, new Uint8Array(sb3file_new));
+if (
+  !(fc1 instanceof HTMLInputElement) ||
+  fc1.type !== "file" ||
+  !(fc2 instanceof HTMLInputElement) ||
+  fc2.type !== "file" ||
+  !(textbox instanceof HTMLTextAreaElement)
+) {
+  throw new Error("HTML 文件对应的不对");
 }
 
-main();
+const stopped = (err: boolean) => {
+  fc1.disabled = false;
+  fc2.disabled = false;
+  textbox.classList.remove("blink");
+  if (err) {
+    textbox.classList.add("error");
+  }
+};
+
+const running = () => {
+  fc1.disabled = true;
+  fc2.disabled = true;
+  textbox.classList.remove("error");
+  textbox.classList.add("blink");
+};
+
+textbox.value = "";
+
+const worker = new Worker("./worker", { type: "module" });
+worker.addEventListener("error", (err) => {
+  textbox.value += "发生了错误: " + err.message + "\n";
+});
+worker.addEventListener("message", (msg) => {
+  switch (msg.data.type) {
+    case "print":
+      textbox.value += msg.data.data;
+      break;
+    case "clear":
+      textbox.value = "";
+      break;
+    case "file":
+      savefile(msg.data.name, msg.data.data);
+      break;
+    case "finish":
+      stopped(msg.data.error);
+      break;
+  }
+});
+
+function fcbond(
+  fc: HTMLInputElement,
+  callback: (name: string, data: ArrayBuffer) => void
+) {
+  fc.value = "";
+  fc.addEventListener("change", () => {
+    const files = fc.files;
+    if (files === null || files[0] === undefined) {
+      console.error("no file");
+      return;
+    }
+    const file = files[0];
+    const fread = new FileReader();
+    fread.addEventListener("load", () => {
+      if (!(fread.result instanceof ArrayBuffer)) {
+        console.error("");
+        return;
+      }
+      callback(file.name, fread.result);
+    });
+    fread.readAsArrayBuffer(file);
+    fc.value = "";
+  });
+}
+
+function savefile(name: string, data: ArrayBuffer) {
+  const blob = new Blob([data], {
+    type: "application/x-octet-stream",
+  });
+  const objurl = URL.createObjectURL(blob);
+  const alink = document.createElement("a");
+  alink.href = objurl;
+  alink.download = name;
+  alink.click();
+  URL.revokeObjectURL(objurl);
+}
+
+fcbond(fc1, (name, sb3file) => {
+  running();
+  worker.postMessage({ type: "fc1", name, sb3file });
+});
+
+fcbond(fc2, (name, sb3file) => {
+  running();
+  worker.postMessage({ type: "fc2", name, sb3file });
+});

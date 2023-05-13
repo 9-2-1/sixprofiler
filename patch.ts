@@ -3,8 +3,14 @@ import * as sb3processor from "./sb3processor";
 export default async function patch(
   sb3json: sb3processor.Sb3JSON,
   modjson: sb3processor.Sb3JSON,
-  remove: boolean
+  remove: boolean,
+  printline?: (text: string) => void
 ) {
+  if (printline === undefined) {
+    printline = (text: string) => {
+      console.warn(text);
+    };
+  }
   // 触发器积木
   const hatOpcodes: string[] = [];
   // 循环积木
@@ -92,7 +98,7 @@ export default async function patch(
           const proccode = prototype.block._source.mutation?.proccode;
           if (typeof proccode === "string") {
             if (proccodemap[proccode] !== undefined) {
-              console.warn(
+              printline(
                 "角色" +
                   JSON.stringify(target.name()) +
                   "的自定义积木" +
@@ -187,7 +193,7 @@ export default async function patch(
             checker.inputvalue(checker.procinput(0), tag);
             checker.inputvalue(checker.procinput(1), tag_);
           } else {
-            console.warn(
+            printline(
               "角色" +
                 JSON.stringify(target.name()) +
                 "的自定义积木" +

@@ -39,7 +39,15 @@ function tableline(tabwidth: number, items: (string | number)[]): string {
     .join("");
 }
 
-export default function getstat(sb3json: sb3processor.Sb3JSON): void {
+export default function getstat(
+  sb3json: sb3processor.Sb3JSON,
+  printline?: (text: string) => void
+): void {
+  if (printline === undefined) {
+    printline = (text: string) => {
+      console.log(text);
+    };
+  }
   const sb3 = new sb3processor.Sb3Class(sb3json);
   const id = sb3.stage().list("zzz sixprofiler evid").value;
   const count = sb3.stage().list("zzz sixprofiler evcount").value;
@@ -298,7 +306,7 @@ export default function getstat(sb3json: sb3processor.Sb3JSON): void {
   // );
 
   const frame = infoarea.length;
-  console.log(
+  printline(
     "记录帧数: " +
       frame +
       " 平均记录1次损耗: " +
@@ -319,7 +327,7 @@ export default function getstat(sb3json: sb3processor.Sb3JSON): void {
     if (id < 1 || id > 10000000) {
       continue;
     }
-    console.log(
+    printline(
       tableline(8, [
         "编号",
         "次数",
@@ -332,7 +340,7 @@ export default function getstat(sb3json: sb3processor.Sb3JSON): void {
         "描述",
       ])
     );
-    console.log(
+    printline(
       tableline(8, [
         id,
         count,
@@ -350,7 +358,7 @@ export default function getstat(sb3json: sb3processor.Sb3JSON): void {
       count: count1,
       maxcount: maxcount1,
     } of Object.values(callfrom)) {
-      console.log(
+      printline(
         " " +
           tableline(8, [
             "来源",
@@ -377,7 +385,7 @@ export default function getstat(sb3json: sb3processor.Sb3JSON): void {
       } else {
         multiplytext = "x" + multiply.toPrecision(5);
       }
-      console.log(
+      printline(
         "  " +
           tableline(8, [
             "调用",
@@ -392,6 +400,6 @@ export default function getstat(sb3json: sb3processor.Sb3JSON): void {
           ])
       );
     }
-    console.log("");
+    printline("");
   }
 }

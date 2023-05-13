@@ -1,0 +1,47 @@
+code {
+  background-color: lightgrey;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+@keyframes loading {
+  from {
+    border-color: black;
+  }
+  to {
+    border-color: lightgrey;
+  }
+}
+
+input[type="file"] {
+  margin: 5px;
+  padding: 5px;
+  border: 2px solid black;
+  transition: border 0.5s;
+}
+
+input[type="file"][disabled] {
+  margin: 5px;
+  padding: 5px;
+  border-color: darkgrey;
+}
+
+textarea {
+  display: block;
+  height: 60vh;
+  width: 100%;
+  resize: none;
+  box-sizing: border-box;
+  white-space: pre;
+  border: 3px solid black;
+  padding: 5px;
+  transition: border 0.5s;
+}
+
+textarea.error {
+  border-color: red;
+}
+
+textarea.blink {
+  animation: 0.3s ease-in-out 0s infinite alternate loading;
+}

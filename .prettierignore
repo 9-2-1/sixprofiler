@@ -1,4 +1,9 @@
-*.js
-*.d.ts
+node_modules/
+.*.un~
+.*.sw?
+.vs/
 tsconfig.tsbuildinfo
-!webpack.config.js
+yarn-error.log
+build/
+
+modfile.ts
