@@ -72,6 +72,37 @@ function getoradd<V>(obj: { [key: number]: V }, key: number, defaul: V): V {
   return ret;
 }
 
+function tableline(tabwidth: number, items: (string | number)[]): string {
+  return items
+    .map((item, i) => {
+      let text = "";
+      if (typeof item === "number") {
+        text = String(item);
+      } else {
+        text = item;
+      }
+      if (i == items.length - 1) {
+        return text;
+      } else {
+        let width = 0;
+        const chars = text.split("");
+        let text2 = "";
+        for (const char of chars) {
+          // TODO 需要一个更加精确的宽度判断方法
+          const clen = (char.codePointAt(0) ?? 0) < 0xff ? 1 : 2;
+          if (clen + width >= tabwidth) {
+            break;
+          }
+          width += clen;
+          text2 += char;
+        }
+        text2 += " ".repeat(tabwidth - width);
+        return text2;
+      }
+    })
+    .join("");
+}
+
 function getstat(sb3json: sb3processor.Sb3JSON): void {
   const sb3 = new sb3processor.Sb3Class(sb3json);
   const id = sb3.stage().list("zzz sixprofiler evid").value;
@@ -179,7 +210,7 @@ function getstat(sb3json: sb3processor.Sb3JSON): void {
           callto: {},
         });
         const toinfo = getoradd(gather, to, {
-          id: from,
+          id: to,
           count: 0,
           time: 0,
           maxcount: 0,
@@ -353,7 +384,7 @@ function getstat(sb3json: sb3processor.Sb3JSON): void {
       continue;
     }
     console.log(
-      [
+      tableline(8, [
         "编号",
         "次数",
         "时长",
@@ -363,20 +394,20 @@ function getstat(sb3json: sb3processor.Sb3JSON): void {
         "大次帧",
         "大时帧",
         "描述",
-      ].join("\t")
+      ])
     );
     console.log(
-      [
+      tableline(8, [
         id,
         count,
         time,
-        (time / count).toFixed(3),
-        (count / frame).toFixed(1),
-        (time / frame).toFixed(3),
+        (time / count).toPrecision(6),
+        (count / frame).toPrecision(6),
+        (time / frame).toPrecision(6),
         maxcount,
         maxtime,
         idmap[id] ?? "未知积木",
-      ].join("\t")
+      ])
     );
     for (const {
       id: from,
@@ -385,17 +416,17 @@ function getstat(sb3json: sb3processor.Sb3JSON): void {
     } of Object.values(callfrom)) {
       console.log(
         " " +
-          [
+          tableline(8, [
             "来源",
             count1,
-            "" + ((count1 / count) * 100).toFixed(1) + "%",
+            "" + ((count1 / count) * 100).toFixed(2).padStart(6, " ") + "%",
             "",
-            (count1 / frame).toFixed(1),
+            (count1 / frame).toPrecision(6),
             "",
             maxcount1,
             "",
-            "" + (idmap[from] ?? "未知积木"),
-          ].join("\t ")
+            idmap[from] ?? "未知积木",
+          ])
       );
     }
     for (const { id: to, count: count1, maxcount: maxcount1 } of Object.values(
@@ -403,16 +434,16 @@ function getstat(sb3json: sb3processor.Sb3JSON): void {
     )) {
       const multiply = count1 / count;
       let multiplytext = "";
-      if (multiply > 999) {
-        multiplytext = "x999+";
-      } else if (multiply > 99.9) {
+      if (multiply > 999999) {
+        multiplytext = "x999999";
+      } else if (multiply > 9999.9) {
         multiplytext = "x" + multiply.toFixed(0);
       } else {
-        multiplytext = "x" + multiply.toFixed(1);
+        multiplytext = "x" + multiply.toPrecision(5);
       }
       console.log(
         "  " +
-          [
+          tableline(8, [
             "调用",
             count1,
             multiplytext,
@@ -421,8 +452,8 @@ function getstat(sb3json: sb3processor.Sb3JSON): void {
             "",
             maxcount1,
             "",
-            "" + (idmap[to] ?? "未知积木"),
-          ].join("\t  ")
+            idmap[to] ?? "未知积木",
+          ])
       );
     }
     console.log("");
@@ -494,6 +525,9 @@ function unpatch(
             next._source.opcode === "procedures_call" &&
             typeof next._source.mutation?.proccode === "string" &&
             next._source.mutation.proccode.startsWith("zzz sixprofiler") &&
+            !next._source.mutation.proccode.startsWith(
+              "zzz sixprofiler position:"
+            ) &&
             next.next() === null
           ) {
             return "deletebelow";
@@ -517,8 +551,13 @@ export async function patch(
   modjson: sb3processor.Sb3JSON,
   patch: boolean
 ) {
+  // 触发器积木
+  const hatOpcodes: string[] = [];
+  // 循环积木
   const loopOpcodes: string[] = [];
+  // 等待积木
   const waitOpcodes: string[] = [];
+  // 知道的积木类型
   const knowTypes: string[] = [];
 
   const sb3 = new sb3processor.Sb3Class(sb3json);
@@ -530,9 +569,17 @@ export async function patch(
   const t_sixlibpos = mod.targetname("记录位置").blockjson();
   const t_sixlibcall = mod.targetname("记录调用").blockjson();
 
+  const t_hats = mod.targetname("触发器积木");
   const t_loops = mod.targetname("循环积木");
   const t_waits = mod.targetname("等待积木");
   const t_knows = mod.targetname("已知的积木类型");
+
+  for (const topblock of t_hats.topBlocks()) {
+    if (Array.isArray(topblock._source)) {
+      continue;
+    }
+    hatOpcodes.push(topblock._source.opcode);
+  }
 
   for (const topblock of t_loops.topBlocks()) {
     if (Array.isArray(topblock._source)) {
@@ -557,7 +604,6 @@ export async function patch(
     if (optype !== undefined) {
       knowTypes.push(optype);
     }
-    // こんにちは、キノシタ
   }
 
   // 清理之前插入的 patch
@@ -573,9 +619,11 @@ export async function patch(
     sb3.stage().list(name, mod.stage().list(name).value);
   }
   let tag = 0;
+  const spacing = 500;
   for (let i = 0; i < sb3.targetcount(); i++) {
     const target = sb3.target(i);
     let tag_ = tag;
+    let topshift = spacing;
     const proccodemap: { [id: string]: number } = Object.create(null);
     for (const topblock of target.topBlocks()) {
       if (Array.isArray(topblock._source)) {
@@ -608,8 +656,14 @@ export async function patch(
     }
     for (let topblock of target.topBlocks()) {
       if (Array.isArray(topblock._source)) {
+        topblock._source[3] = topshift;
+        topblock._source[4] = 0;
+        topshift += spacing;
         continue;
       }
+      topblock._source.x = topshift;
+      topblock._source.y = 0;
+      topshift += spacing;
       tag++;
       if (topblock._source.opcode === "event_whenflagclicked") {
         const next = topblock.next();
@@ -655,15 +709,16 @@ export async function patch(
           if (opcode === "procedures_call") {
             callList.push(block);
           }
-          // 在触发器积木后，循环积木后，调用积木后，等待积木后
+          // 在触发器积木后，定义积木后，循环积木后，等待积木后，调用积木后，未知且有后续积木的积木后
           const optype = opcode.split("_")[0];
           if (
-            (block._source.topLevel && block.next() !== null) ||
-            (!block._source.topLevel && optype === undefined) ||
-            (optype !== undefined && !knowTypes.includes(optype)) ||
+            hatOpcodes.includes(opcode) ||
+            opcode === "procedures_definition" ||
             (loopOpcodes.includes(opcode) && opcode !== "control_forever") ||
             waitOpcodes.includes(opcode) ||
-            opcode === "procedures_call"
+            opcode === "procedures_call" ||
+            ((optype === undefined || !knowTypes.includes(optype)) &&
+              block.next() !== null)
           ) {
             appendList.push(block);
           }
@@ -678,7 +733,6 @@ export async function patch(
         if (proccode !== undefined) {
           const tag_ = proccodemap[proccode];
           if (tag_ !== undefined) {
-            //ポッピン
             const checker = target.newBlock(t_sixlibcall)[0];
             if (checker === undefined) {
               throw new Error();
@@ -704,7 +758,6 @@ export async function patch(
         }
         checker.inputvalue(checker.procinput(0), tag);
         checker.inputvalue(checker.procinput(1), 0);
-        //ポッピン
         checker.insertBefore(block);
       }
       for (const block of appendList) {
@@ -718,7 +771,6 @@ export async function patch(
         } else {
           checker.inputvalue(checker.procinput(1), 0);
         }
-        //ポッピン
         const next = block.next();
         block.next(checker);
         checker.next(next);

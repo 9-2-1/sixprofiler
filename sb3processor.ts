@@ -1021,6 +1021,14 @@ export class BlockClass {
   }
 
   insertBefore(other: BlockClass) {
+    if (
+      other.parent() === null &&
+      !Array.isArray(this._source) &&
+      !Array.isArray(other._source)
+    ) {
+      this._source.x = other._source.x;
+      this._source.y = other._source.y;
+    }
     other.parentReplace(this);
     this.next(other);
   }
