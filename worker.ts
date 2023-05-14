@@ -35,10 +35,11 @@ async function fc1(name: string, sb3file: ArrayBuffer) {
   savefile(name.replace(".sb3", ".profiler.sb3"), sb3file_new);
 }
 
-async function fc2(_: string, sb3file: ArrayBuffer) {
+async function fc2(name: string, sb3file: ArrayBuffer) {
   clear();
   const sb3load = new loader();
   const sb3json = await sb3load.load(sb3file);
+  print("文件 " + JSON.stringify(name) + ":\n");
   await getstat(sb3json, (text) => {
     print(text + "\n");
   });

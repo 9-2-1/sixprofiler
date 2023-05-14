@@ -1,3 +1,5 @@
+import TheWorker from "./worker?worker&inline";
+
 const fc1 = document.getElementById("fc1");
 const fc2 = document.getElementById("fc2");
 const textbox = document.getElementById("text");
@@ -30,7 +32,8 @@ const running = () => {
 
 textbox.value = "";
 
-const worker = new Worker("./worker", { type: "module" });
+const worker = new TheWorker();
+
 worker.addEventListener("error", (err) => {
   textbox.value += "发生了错误: " + err.message + "\n";
 });
