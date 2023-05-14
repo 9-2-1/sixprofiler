@@ -315,6 +315,7 @@ export default function getstat(
       tloss0 +
       "ms"
   );
+  printline("");
   for (const {
     id,
     count,

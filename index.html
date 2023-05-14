@@ -1,31 +1,47 @@
-<html>
+<!DOCTYPE html>
+<html lang="zh-CN">
   <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SixProfiler</title>
     <link rel="stylesheet" type="text/css" href="index.css" />
   </head>
   <body>
-    <h1>标题标题标题标题</h1>
-    <p>介绍介绍介绍介绍介绍介绍</p>
-    <ol>
-      <li>
-        选择需要测试的 .sb3 文件，选择后如果一切正常，加入计时补丁的 .sb3
-        文件将自动导出。
-      </li>
-      <input id="fc1" accept=".sb3" type="file" />
-      <li>将加入计时补丁的 .sb3 文件导入到你所使用的编辑器，点击绿旗运行。</li>
-      <li>可以多次点击绿旗运行，运行记录会持续收集。</li>
-      <li>
-        如果运行了错误的积木，想要清除运行记录，可以按下
-        <code>W+F+空格</code> ，在询问中回答 <code>N</code> 重置运行记录。
-      </li>
-      <li>
-        运行完成后，点击停止并保存 .sb3 文件。此时保存的 .sb3
-        文件中包含了运行记录。
-      </li>
-      <li>在这里导入包含了运行记录的 .sb3 文件，查看结果。</li>
-      <input id="fc2" accept=".sb3" type="file" />
-    </ol>
-    <textarea readonly id="text"></textarea>
-    <script type="module" src="index.ts"></script>
+    <div id="page">
+      <h1>SixProfiler</h1>
+      <ol>
+        <li>
+          选择需要测试的 .sb3 文件，选择后如果一切正常，加入计时补丁的 .sb3
+          文件将自动保存。
+          <br />
+          <label
+            >要测试的 .sb3 文件：<input id="fc1" accept=".sb3" type="file"
+          /></label>
+        </li>
+        <li>
+          将加入计时补丁的 .sb3 文件用你所使用的编辑器打开，点击绿旗运行。
+        </li>
+        <li>可以多次点击绿旗运行，运行记录会持续收集。</li>
+        <li>
+          如果运行了错误的积木，想要清除运行记录，可以按下
+          <code>W+F+空格</code> ，在询问中回答 <code>N</code> 重置运行记录。
+        </li>
+        <li>
+          运行完成后，点击停止并保存 .sb3 文件。此时保存的 .sb3
+          文件中包含了运行记录。
+        </li>
+        <li>
+          在这里打开包含了运行记录的 .sb3 文件，查看结果。
+          <br />
+          <label
+            >要读取记录的 .sb3 文件：<input id="fc2" accept=".sb3" type="file"
+          /></label>
+          <input id="rs1" type="button" disabled value="复制结果文字" />
+          <input id="rs2" type="button" disabled value="保存结果" />
+        </li>
+      </ol>
+      <textarea readonly id="text" placeholder="这里将会显示结果"></textarea>
+      <script type="module" src="index.ts"></script>
+    </div>
   </body>
 </html>
