@@ -6,7 +6,7 @@ export default defineConfig({
   base: "./",
   plugins: [
     createHtmlPlugin({
-      minify: false,
+      minify: true,
     }),
     viteSingleFile({
       removeViteModuleLoader: true,
@@ -18,7 +18,7 @@ export default defineConfig({
   },
   build: {
     target: "es2015",
-    minify: false,
+    minify: true,
     assetsInlineLimit: 1024 * 1024 * 1024,
   },
 });
